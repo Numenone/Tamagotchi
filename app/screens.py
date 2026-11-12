@@ -452,8 +452,41 @@ def _wire(surf, a, b, col, t, dash=False):
     pygame.draw.circle(surf, (255, 255, 255), (int(pts[k][0]), int(pts[k][1])), 3)
 
 
+ESP32_WIRING = (
+    "O ESP32 faz o papel do PC: ouve, pergunta ao Claude e fala. O Uno, o shield e a tela continuam iguais.\n\n"
+    "1. Grave o Uno pelo Studio como sempre (cabo USB no PC). Depois grave o ESP32 em Configurações > Sem fio.\n"
+    "2. Ligue os fios com tudo desligado:\n"
+    "    * ESP32 GPIO17 (TX2)  ->  Uno pino 0 (RX)\n"
+    "    * Uno pino 1 (TX)  ->  resistor 1k  ->  ESP32 GPIO16 (RX2)  ->  resistor 2k  ->  GND\n"
+    "      (o divisor baixa os 5 V do Uno para 3,3 V; sem ele o ESP32 pode queimar)\n"
+    "    * Uno 5V  ->  ESP32 VIN (ou 5V)\n"
+    "    * Uno GND  ->  ESP32 GND\n"
+    "3. Alimente o Uno por um power bank ou carregador USB. Ligou, o pet mostra 'Wi-Fi ok!'.\n"
+    "4. Segure o botão C e fale.\n\n"
+    "Para regravar o Uno depois, tire o fio do pino 0 antes (o ESP32 atrapalha a gravação).\n"
+    "Wi-Fi de 2,4 GHz sem página de login: o roteador do celular é o mais garantido.")
+
+
 class WiringScreen(Screen):
+    def __init__(self, app):
+        super().__init__(app)
+        self.esp = False
+        self.toggle_b = ui.Button((ui.W - 330, 26, 290, 44), "Modo sem fio (ESP32)", self._toggle, "cyan", size=15)
+
+    def _toggle(self):
+        self.esp = not self.esp
+        self.toggle_b.label = "Ligações com o PC" if self.esp else "Modo sem fio (ESP32)"
+
+    def handle(self, ev):
+        return self.toggle_b.handle(ev)
+
     def draw(self, surf, dt):
+        self.toggle_b.draw(surf)
+        if self.esp:
+            ui.text(surf, "Modo sem fio (ESP32)", (SIDEBAR_W + 40, 30), 32, C["text"], True)
+            ui.panel(surf, (SIDEBAR_W + 40, 100, 940, 560))
+            ui.text_block(surf, ESP32_WIRING, (SIDEBAR_W + 66, 124), 890, 17)
+            return
         ui.text(surf, "Ligações do hardware", (SIDEBAR_W + 40, 30), 32, C["text"], True)
         ui.text(surf, "Encaixe o shield VS1053 em cima do Arduino Uno e ligue o resto assim:",
                 (SIDEBAR_W + 40, 76), 17, C["muted"])
@@ -900,6 +933,12 @@ class SettingsScreen(Screen):
 
     def on_show(self):
         self.build()
+        if self.app.comp.mgr:  # nao tenta gravar o Uno numa placa que acabou de ser ligada
+            self.app.comp.mgr.hold("settings")
+
+    def on_hide(self):
+        if self.app.comp.mgr:
+            self.app.comp.mgr.release("settings")
 
     def build(self):
         s = self.app.s
@@ -985,6 +1024,22 @@ class SettingsScreen(Screen):
             ui.Choice((0, 0, 380, 42), [(0, "Automático"), (1024, "1x"), (2048, "2x"), (4096, "4x"), (8192, "8x")], int(s["rec_gain"])), "rec_gain")
         row("Usar entrada MIC (P2) como linha", "Ligue se usar um microfone externo com fio.", ui.Toggle((0, 0), s["rec_line_in"]), "rec_line_in")
         row("Ajuste MIDI do VS1053", "Só para shields que ficam mudos (iniciam em modo MIDI).", ui.Toggle((0, 0), s["vs_midi_fix"]), "vs_midi_fix")
+        sec("Sem fio (ESP32)")
+        row("Como funciona", "O ESP32 liga na serial do Uno e faz o papel do PC. Veja o README.",
+            ui.Button((0, 0, 200, 40), "Ver ligações", self._esp_wiring, "secondary", size=15))
+        row("Wi-Fi: nome da rede", "Rede de 2,4 GHz. Wi-Fi de escola com login não funciona: use o roteador do celular.",
+            ui.TextInput((0, 0, 380, 42), s["wifi_ssid"], "Nome da rede"), "wifi_ssid")
+        row("Wi-Fi: senha", "Vazio se a rede for aberta.",
+            ui.TextInput((0, 0, 380, 42), s["wifi_password"], "Senha", password=True), "wifi_password")
+        row("Chave do Google Cloud", "Com Speech-to-Text e Text-to-Speech ativados. Vira o ouvido e a voz.",
+            ui.TextInput((0, 0, 380, 42), s["google_api_key"], "AIza...", password=True), "google_api_key")
+        row("Voz do Google", "", ui.Choice((0, 0, 380, 42), [("FEMALE", "Feminina"), ("MALE", "Masculina")],
+                                           s["gtts_gender"]), "gtts_gender")
+        esp_ports = [("", "Escolha a porta")] + [(p[0], f"{p[0]} {p[1][:22]}") for p in F.list_ports()]
+        row("Porta do ESP32", "Ligue só o ESP32 no USB e escolha a porta dele.",
+            ui.Choice((0, 0, 380, 42), esp_ports, s["esp32_port"]), "esp32_port")
+        row("Atenção", "As chaves do Claude e do Google ficam gravadas dentro do ESP32.",
+            ui.Button((0, 0, 230, 40), "Gravar o ESP32", self.flash_esp32, "ok", size=15))
         sec("Outros")
         row("", "", ui.Button((0, 0, 230, 40), "Rever o tutorial", lambda: self.app.go("tutorial"), "secondary", size=15))
         row("", "", ui.Button((0, 0, 260, 40), "Novo ovo (zerar o pet)", self.reset_pet, "danger", size=15))
@@ -1087,6 +1142,57 @@ class SettingsScreen(Screen):
                 self.msg = ("Tocando a voz.", C["green"])
             except Exception as e:
                 self.msg = (f"Falha na voz: {str(e)[:120]}", C["red"])
+        threading.Thread(target=run, daemon=True).start()
+
+    def _esp_wiring(self):
+        w = self.app.screens["wiring"]
+        if not w.esp:
+            w._toggle()
+        self.app.go("wiring")
+
+    def flash_esp32(self):
+        if getattr(self, "_flashing", False):
+            return
+        new = self.values()
+        falta = F.esp32_missing(new)
+        if falta:
+            self.msg = ("Para gravar o ESP32 falta: " + ", ".join(falta) + ".", C["yellow"])
+            return
+        port = new.get("esp32_port", "")
+        if not port:
+            self.msg = ("Escolha a porta do ESP32 (ligue só ele no USB).", C["yellow"])
+            return
+        self.app.s.update(new)
+        SET.save(self.app.s)
+        self._flashing = True
+        self.msg = ("Preparando para gravar o ESP32...", C["cyan"])
+        mgr = self.app.comp.mgr
+
+        def log(line):
+            low = line.lower()
+            if "instalando o suporte ao esp32" in low:
+                self.msg = ("Instalando o suporte ao ESP32 (só na primeira vez, pode levar uns 10 minutos)...", C["cyan"])
+            elif "arduino-cli compile" in low:
+                self.msg = ("Compilando o firmware do ESP32...", C["cyan"])
+            elif low.startswith("enviando para o esp32"):
+                self.msg = ("Gravando o ESP32... se travar, segure o botão BOOT da placa.", C["cyan"])
+            elif low.startswith("pronto!"):
+                self.msg = ("ESP32 gravado! Ligue ele no Uno (veja Ligações) e segure o C para conversar sem o PC.", C["green"])
+            elif low.startswith("erro"):
+                self.msg = (line[:200], C["red"])
+
+        def run():
+            if mgr:
+                mgr.hold("esp32")
+                mgr.drop_port(port)
+            try:
+                F.upload_esp32(dict(self.app.s), port, log)
+            except Exception as e:
+                self.msg = (f"Falha ao gravar o ESP32: {str(e)[:150]}", C["red"])
+            finally:
+                if mgr:
+                    mgr.release("esp32")
+                self._flashing = False
         threading.Thread(target=run, daemon=True).start()
 
     def clear_mem(self):

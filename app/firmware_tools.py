@@ -321,6 +321,163 @@ def compile_fw(s, log=print):
     return rc == 0
 
 
+# ---------------------------------------------------------------------------
+# ESP32: ponte sem fio (o ESP32 faz o papel do PC, ligado na serial do Uno)
+# ---------------------------------------------------------------------------
+ESP32_DIR = os.path.join(os.path.dirname(FIRMWARE_DIR), "esp32_bridge")
+ESP32_URL = "https://espressif.github.io/arduino-esp32/package_esp32_index.json"
+ESP32_FQBN = "esp32:esp32:esp32:PartitionScheme=huge_app"
+
+ESP32_MSGS = {
+    "pt": ("Nao entendi :(", "Sem Wi-Fi", "Wi-Fi ok!", "Erro no Claude",
+           "Hmm, disso eu prefiro não falar. Vamos brincar de outra coisa?"),
+    "en": ("Didn't get that :(", "No Wi-Fi", "Wi-Fi ok!", "Claude error",
+           "Hmm, I'd rather not talk about that. Let's play something else?"),
+    "es": ("No entendi :(", "Sin Wi-Fi", "Wi-Fi ok!", "Error de Claude",
+           "Mmm, de eso prefiero no hablar. ¿Jugamos a otra cosa?"),
+}
+
+
+def c_string(text):
+    """Literal de C seguro para qualquer texto (aspas, barras e acentos)."""
+    out = []
+    for b in str(text).encode("utf-8"):
+        if b in (0x22, 0x5C):
+            out.append("\\" + chr(b))
+        elif 32 <= b < 127:
+            out.append(chr(b))
+        else:
+            out.append(f"\\{b:03o}")
+    return '"' + "".join(out) + '"'
+
+
+def esp32_missing(s):
+    falta = []
+    if not s.get("wifi_ssid", "").strip():
+        falta.append("o nome do Wi-Fi")
+    if not s.get("anthropic_api_key", "").strip():
+        falta.append("a chave do Claude")
+    if not s.get("google_api_key", "").strip():
+        falta.append("a chave do Google Cloud")
+    return falta
+
+
+def gen_esp32_config(s):
+    lang = lang_short(s)
+    msgs = ESP32_MSGS.get(lang, ESP32_MSGS["pt"])
+    name = ascii_only(s.get("pet_name", "PIXO"))[:12] or "PIXO"
+    vol = int(s.get("volume", 85))
+    att = max(0, min(200, int((100 - vol) * 1.6)))
+    rate = int(str(s.get("tts_rate", "+5%")).replace("%", "").replace("+", "") or 0)
+    model = s.get("claude_model", "claude-opus-5-5")
+    acts = A.ACTIONS + ["pet"]
+    rows = [
+        "// GERADO AUTOMATICAMENTE pelo Tamagotchi Studio. Nao edite a mao.",
+        "#pragma once",
+        f"#define PET_NAME {c_string(name)}",
+        f"#define LANG_CODE {c_string(s.get('language', 'pt-BR'))}",
+        f"#define UNO_BAUD {int(s.get('baud', 250000))}",
+        f"#define UNO_VOLUME_ATT {att}",
+        f"#define CLAUDE_MODEL {c_string(model)}",
+        f"#define CLAUDE_EFFORT {c_string(s.get('claude_effort', 'low'))}",
+        f"#define CLAUDE_FALLBACK {1 if model in ('claude-opus-5-5', 'claude-sonnet-5-5') else 0}",
+        f"#define HISTORY_TURNS {int(s.get('history_turns', 10))}",
+        f"#define GTTS_VOICE {c_string(s.get('gtts_voice', ''))}",
+        f"#define GTTS_GENDER {c_string(s.get('gtts_gender', 'FEMALE'))}",
+        f"#define GTTS_PITCH {float(s.get('gtts_pitch', 4.0)):.1f}",
+        f"#define GTTS_RATE {max(0.5, min(2.0, 1 + rate / 100)):.2f}",
+        f"#define ANIM_COUNT {len(A.ANIMATIONS)}",
+        "static const char* const ANIM_NAMES[ANIM_COUNT] = {"
+        + ", ".join(c_string(a[0]) for a in A.ANIMATIONS) + "};",
+        f"#define ACT_COUNT {len(acts)}",
+        "static const char* const ACT_NAMES[ACT_COUNT] = {" + ", ".join(c_string(a) for a in acts) + "};",
+    ]
+    for anim in ("thinking", "confused", "happy", "talking", "listening"):
+        rows.append(f"#define ANIM_{anim.upper()} {A.ANIM_INDEX[anim]}")
+    for key, val in zip(("NOT_UNDERSTOOD", "NO_WIFI", "WIFI_OK", "CLAUDE_ERR", "REFUSAL"), msgs):
+        rows.append(f"#define MSG_{key} {c_string(val)}")
+    return "\n".join(rows) + "\n"
+
+
+def gen_esp32_prompt(s):
+    import json
+    from .brain import SCHEMA, build_system
+    system = build_system(s)
+    assert ")TAMA" not in system
+    return ("// GERADO AUTOMATICAMENTE pelo Tamagotchi Studio (mesmo prompt do cerebro do PC).\n"
+            "#pragma once\n"
+            f'static const char SYSTEM_PROMPT[] = R"TAMA({system})TAMA";\n'
+            f"static const char SCHEMA_JSON[] = {c_string(json.dumps(SCHEMA, separators=(',', ':')))};\n")
+
+
+def gen_esp32_secrets(s):
+    return ("// GERADO pelo Tamagotchi Studio. Contem as suas chaves: NAO compartilhe nem suba no GitHub.\n"
+            "#pragma once\n"
+            f"#define WIFI_SSID {c_string(s.get('wifi_ssid', '').strip())}\n"
+            f"#define WIFI_PASS {c_string(s.get('wifi_password', ''))}\n"
+            f"#define ANTHROPIC_API_KEY {c_string(s.get('anthropic_api_key', '').strip())}\n"
+            f"#define GOOGLE_API_KEY {c_string(s.get('google_api_key', '').strip())}\n")
+
+
+def write_esp32_files(s, log=print, with_secrets=True):
+    os.makedirs(ESP32_DIR, exist_ok=True)
+    files = {"bridge_config.h": gen_esp32_config(s), "prompt.h": gen_esp32_prompt(s)}
+    if with_secrets:
+        files["secrets.h"] = gen_esp32_secrets(s)
+    for fn, body in files.items():
+        with open(os.path.join(ESP32_DIR, fn), "w", encoding="utf-8", newline="\n") as f:
+            f.write(body)
+    log("Arquivos do ESP32 gerados a partir das configuracoes.")
+
+
+def ensure_esp32_core(log=print):
+    if not ensure_cli(log):
+        return False
+    rc, out = _run(["core", "list"], log)
+    if "esp32:esp32" not in out:
+        log("Instalando o suporte ao ESP32 (so na primeira vez, e grande: pode levar uns 10 minutos)...")
+        _run(["core", "update-index", "--additional-urls", ESP32_URL], log)
+        rc, _ = _run(["core", "install", "esp32:esp32", "--additional-urls", ESP32_URL], log, timeout=3600)
+        if rc != 0:
+            return False
+    rc, out = _run(["lib", "list", "ArduinoJson"], log)
+    if "ArduinoJson" not in out:
+        log("Instalando a biblioteca ArduinoJson...")
+        rc, _ = _run(["lib", "install", "ArduinoJson"], log)
+        if rc != 0:
+            return False
+    return True
+
+
+def compile_esp32(s, log=print, with_secrets=True):
+    write_esp32_files(s, log, with_secrets)
+    if not ensure_esp32_core(log):
+        log("ERRO ao instalar o suporte ao ESP32 (confira a internet).")
+        return False
+    rc, _ = _run(["compile", "--fqbn", ESP32_FQBN, ESP32_DIR], log, timeout=1800)
+    log("Compilado com sucesso!" if rc == 0 else "ERRO na compilacao do ESP32 (veja acima).")
+    return rc == 0
+
+
+def upload_esp32(s, port, log=print):
+    falta = esp32_missing(s)
+    if falta:
+        log("Falta preencher: " + ", ".join(falta) + ".")
+        return False
+    if not port:
+        log("Escolha a porta USB do ESP32.")
+        return False
+    if not compile_esp32(s, log):
+        return False
+    log(f"Enviando para o ESP32 na {port}... (se travar em 'Connecting', segure o botao BOOT da placa)")
+    rc, _ = _run(["upload", "-p", port, "--fqbn", ESP32_FQBN, ESP32_DIR], log)
+    if rc == 0:
+        log("Pronto! ESP32 gravado. Ligue ele no Uno e o pet conversa sem o PC.")
+    else:
+        log("ERRO no envio. Confira a porta, feche o Monitor Serial e tente segurando o botao BOOT.")
+    return rc == 0
+
+
 def upload_fw(s, port, log=print):
     if not compile_fw(s, log):
         return False

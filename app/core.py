@@ -31,8 +31,23 @@ class DeviceManager:
         self._bad = {}
         self._force = None
         self._run = True
+        self.holds = set()  # enquanto tiver algo aqui, nao procura nem grava placas
         self.state_since = time.time()
         threading.Thread(target=self._loop, daemon=True).start()
+
+    def hold(self, who):
+        self.holds.add(who)
+
+    def release(self, who):
+        self.holds.discard(who)
+
+    def drop_port(self, port):
+        """Solta a porta (ex.: para gravar o ESP32 nela)."""
+        if self.device and self.port == port:
+            self.device.close()
+            self.device = None
+            self.c.on_disconnect()
+            self._set("waiting")
 
     def _set(self, state, msg=""):
         self.state = state
@@ -71,14 +86,18 @@ class DeviceManager:
     def _candidates(self):
         ports = F.list_ports()
         want = self.c.s.get("serial_port", "")
+        esp = self.c.s.get("esp32_port", "")
         now = time.time()
-        names = [p for p in ports if self._bad.get(p[0], 0) < now]
+        names = [p for p in ports if self._bad.get(p[0], 0) < now and p[0] != esp]
         if want:
             return [p for p in names if p[0] == want]
         return [p for p in names if p[2] > 0]  # so portas USB (Arduino primeiro)
 
     def _loop(self):
         while self._run:
+            if self.holds:
+                time.sleep(0.4)
+                continue
             try:
                 if self.state in ("waiting", "error"):
                     if self.state == "error" and time.time() - self.state_since < 6:

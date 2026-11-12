@@ -54,6 +54,9 @@ class App:
 
     def go(self, name):
         ui.TextInput.active = None
+        prev = self.screens.get(self.cur)
+        if prev is not None and prev is not self.screens[name] and hasattr(prev, "on_hide"):
+            prev.on_hide()
         self.cur = name
         if name != "tutorial":
             self.start_companion()

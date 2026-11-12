@@ -12,6 +12,9 @@ data/
 # Compilador do Arduino (o TAMAGOTCHI.bat baixa sozinho)
 tools/arduino-cli/
 
+# Chaves e Wi-Fi gravados no ESP32 (o Studio gera ao clicar em Gravar o ESP32)
+firmware/esp32_bridge/secrets.h
+
 # Arquivos de build
 firmware/tamagotchi/build/
 *.hex

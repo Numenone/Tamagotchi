@@ -89,8 +89,45 @@ app/                      programa do PC (pygame)
   serial_link.py          protocolo USB com o Arduino
   firmware_tools.py       gera config.h/anim_data.h e grava com o arduino-cli
 firmware/tamagotchi/      firmware do Arduino (tamagotchi.ino, tft.h, oled.h, vs1053.h)
+firmware/esp32_bridge/    firmware do ESP32 para o modo sem fio (secrets.h com as chaves fica fora do Git)
 data/                     memória da conversa e estado do pet virtual
 ```
+
+## Modo sem fio (ESP32): conversar sem o PC
+
+Um **ESP32** ligado na serial do Uno faz o papel do PC: ouve pelo **Google Speech-to-Text**, pensa com o **Claude** e fala pelo **Google Text-to-Speech**. O firmware do Uno, o shield e a tela continuam iguais.
+
+**Atenção:** a chave do Claude e a do Google ficam gravadas dentro do ESP32. Quem pegar a placa consegue extrair as duas. Use chaves só para isso, com limite de gasto: no console da Anthropic, um workspace com spend limit baixo; no Google Cloud, a chave restrita às duas APIs de voz. A conexão HTTPS também não confere o certificado do servidor (é um protótipo).
+
+**O que precisa:**
+* Placa ESP32 DevKit (ESP32-WROOM-32; a versão com PSRAM, WROVER, também serve)
+* 2 resistores (1k e 2k) para o divisor de tensão
+* Chave do Google Cloud: crie um projeto em console.cloud.google.com, ative a cobrança, ative as APIs **Cloud Speech-to-Text** e **Cloud Text-to-Speech** e crie uma chave de API em Credenciais. As duas têm cota gratuita mensal.
+* Wi-Fi de 2,4 GHz sem página de login (o roteador do celular é o mais garantido)
+
+**Como gravar:**
+1. Grave o Uno pelo Studio como sempre (cabo USB no PC).
+2. Em **Configurações > Sem fio (ESP32)**, preencha o Wi-Fi e a chave do Google. A chave do Claude é a mesma do Studio.
+3. Ligue **só o ESP32** no USB, escolha a porta dele e clique em **Gravar o ESP32**. Na primeira vez o Studio baixa o suporte ao ESP32 (é grande, uns 10 minutos). Se a gravação travar em "Connecting", segure o botão **BOOT** da placa.
+
+**Ligações (com tudo desligado):**
+
+| ESP32 | Uno |
+|---|---|
+| GPIO17 (TX2) | pino 0 (RX) |
+| GPIO16 (RX2) | pino 1 (TX), passando pelo divisor: Uno TX, resistor 1k, GPIO16, resistor 2k, GND |
+| VIN (ou 5V) | 5V |
+| GND | GND |
+
+O divisor baixa os 5 V do Uno para 3,3 V. Sem ele o ESP32 pode queimar.
+
+Alimente o Uno por um power bank ou carregador USB. Quando o ESP32 conecta no Wi-Fi, o pet mostra "Wi-Fi ok!". Segure o botão C e fale. Se aparecer "Sem PC :(" ou "Sem Wi-Fi", o ESP32 não está conectado.
+
+Para regravar o Uno depois, tire o fio do pino 0 antes (o ESP32 atrapalha a gravação).
+
+**Para ver o que está acontecendo:** com o ESP32 no USB do PC, abra um monitor serial em 115200. Ele mostra o Wi-Fi, o que entendeu, a resposta do pet e os erros (sem mostrar as chaves).
+
+**Diferenças em relação ao PC:** a memória da conversa fica só na RAM (some quando desliga), e a voz é a do Google em vez da Edge TTS.
 
 ## Problemas comuns
 

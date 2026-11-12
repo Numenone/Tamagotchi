@@ -62,6 +62,14 @@ DEFAULTS = {
     "rec_maxgain": 4096,
     "rec_line_in": False,
     "vs_midi_fix": False,
+    # Sem fio: ESP32 ligado na serial do Uno faz o papel do PC
+    "wifi_ssid": "",
+    "wifi_password": "",
+    "google_api_key": "",
+    "gtts_gender": "FEMALE",
+    "gtts_voice": "",
+    "gtts_pitch": 4.0,
+    "esp32_port": "",
 }
 
 MODELS = [
