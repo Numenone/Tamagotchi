@@ -1,0 +1,18 @@
+# Ambiente Python (o TAMAGOTCHI.bat recria)
+.venv/
+__pycache__/
+*.pyc
+
+# Configuracoes pessoais: contem a chave do Claude (o Studio cria no tutorial)
+settings.json
+
+# Memoria da conversa e estado do pet virtual (gerados ao usar)
+data/
+
+# Compilador do Arduino (o TAMAGOTCHI.bat baixa sozinho)
+tools/arduino-cli/
+
+# Arquivos de build
+firmware/tamagotchi/build/
+*.hex
+*.elf
