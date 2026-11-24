@@ -32,7 +32,7 @@
 #define VS_REC_LINE_IN 0
 #define VS_MIDI_FIX 0
 #define DECAY_SECONDS 90
-#define LBL_HUNGER "Fome"
+#define LBL_HUNGER "Comida"
 #define LBL_HAPPY "Alegria"
 #define LBL_ENERGY "Energia"
 #define LBL_CLEAN "Higiene"

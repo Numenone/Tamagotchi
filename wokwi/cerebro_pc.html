@@ -55,6 +55,11 @@
   #text { flex: 1; font: inherit; color: var(--text); background: #0d1028; border: 1px solid var(--line);
           border-radius: 10px; padding: 11px 12px; min-width: 0; }
   .hint { font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .microw { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 13px; color: var(--muted); flex-wrap: wrap; }
+  .microw select { font: inherit; color: var(--text); background: #0d1028; border: 1px solid var(--line);
+                   border-radius: 8px; padding: 6px 8px; max-width: 100%; flex: 1; min-width: 180px; }
+  .meter { width: 120px; height: 10px; background: #0d1028; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .meter div { height: 100%; width: 0; background: var(--green); transition: width .1s; }
 </style>
 </head>
 <body>
@@ -97,17 +102,23 @@
       <button id="mic" title="Falar">🎤</button>
       <input id="text" placeholder="Fale no microfone ou digite aqui e aperte Enter" autocomplete="off">
     </div>
-    <div class="hint" id="hint">Clique no microfone, fale, e espere o {{PET}} responder. A voz sai por este computador.</div>
+    <div class="microw">
+      <label for="micSel">Microfone</label>
+      <select id="micSel"></select>
+      <div class="meter"><div id="level"></div></div>
+    </div>
+    <div class="hint" id="hint">Clique no 🎤, fale e clique de novo para mandar. O medidor verde tem que mexer quando você fala. A voz do {{PET}} sai por este computador.</div>
   </div>
 </div>
 
 <script>
-const BARS = [["hunger", "Fome", "--orange"], ["happy", "Alegria", "--pink"], ["energy", "Energia", "--yellow"], ["clean", "Higiene", "--cyan"]];
+const BARS = [["hunger", "Comida", "--orange"], ["happy", "Alegria", "--pink"], ["energy", "Energia", "--yellow"], ["clean", "Higiene", "--cyan"]];
 const barsEl = document.getElementById("bars");
 barsEl.innerHTML = BARS.map(([k, l, c]) =>
   `<div class="bar"><span>${l}</span><div class="track"><div class="fill" id="f_${k}" style="background:var(${c})"></div></div><span class="num" id="n_${k}"></span></div>`).join("");
 
-let after = 0, firstLoad = true;
+let after = 0, firstLoad = true, micOn = false;
+const mic = document.getElementById("mic");
 const logEl = document.getElementById("log");
 const audio = new Audio();
 
@@ -156,11 +167,19 @@ async function poll() {
     const cE = document.getElementById("cEsp");
     cE.textContent = j.state.fresh ? "ESP32: falando com o PC" : "ESP32: esperando notícia";
     cE.className = "chip " + (j.state.fresh ? "ok" : "warn");
-    document.getElementById("thinking").textContent = j.status.thinking ? "{{PET}} está pensando..." : "";
+    const m = j.status.mic || {};
+    micOn = !!m.on;
+    mic.classList.toggle("on", micOn);
+    document.getElementById("level").style.width = Math.round((m.level || 0) * 100) + "%";
+    document.getElementById("thinking").textContent =
+      micOn ? "Ouvindo... clique no 🎤 de novo para mandar" :
+      m.transcribing ? "Entendendo o que você falou..." :
+      j.status.thinking ? "{{PET}} está pensando..." :
+      m.error ? m.error : "";
   } catch (e) {
     document.getElementById("cNtfy").textContent = "programa fechado?";
   }
-  setTimeout(poll, 1000);
+  setTimeout(poll, micOn ? 150 : 800);
 }
 poll();
 
@@ -177,41 +196,28 @@ document.querySelectorAll("[data-a]").forEach(b => b.onclick = () =>
   fetch("/api/action", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({action: b.dataset.a})}));
 document.getElementById("clear").onclick = () => fetch("/api/clear", {method: "POST"});
 
-// microfone: reconhecimento de voz do proprio navegador (Chrome ou Edge)
-const mic = document.getElementById("mic");
-const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-if (!SR) {
-  mic.disabled = true;
-  document.getElementById("hint").textContent = "Este navegador não tem reconhecimento de voz. Abra no Chrome ou no Edge, ou digite.";
-} else {
-  const rec = new SR();
-  rec.lang = "pt-BR";
-  rec.interimResults = true;
-  rec.maxAlternatives = 1;
-  let listening = false, finalText = "";
-  rec.onresult = ev => {
-    let interim = "";
-    for (let i = ev.resultIndex; i < ev.results.length; i++) {
-      if (ev.results[i].isFinal) finalText += ev.results[i][0].transcript;
-      else interim += ev.results[i][0].transcript;
-    }
-    input.value = finalText + interim;
-  };
-  rec.onend = () => {
-    listening = false; mic.classList.remove("on");
-    if (finalText.trim()) { say(finalText); input.value = ""; }
-    finalText = "";
-  };
-  rec.onerror = ev => {
-    if (ev.error === "not-allowed") document.getElementById("hint").textContent = "O navegador bloqueou o microfone. Libere no cadeado da barra de endereço.";
-  };
-  mic.onclick = () => {
-    audio.pause();
-    if (listening) { rec.stop(); return; }
-    finalText = ""; input.value = "";
-    try { rec.start(); listening = true; mic.classList.add("on"); } catch (e) {}
-  };
-}
+// microfone: quem grava e o programa no PC (igual ao Studio), nao o navegador
+mic.onclick = async () => {
+  audio.pause();
+  if (micOn) {
+    micOn = false; mic.classList.remove("on");
+    await fetch("/api/mic/stop", {method: "POST"});
+    return;
+  }
+  const r = await fetch("/api/mic/start", {method: "POST"});
+  const j = await r.json().catch(() => ({}));
+  if (j.ok) { micOn = true; mic.classList.add("on"); }
+  else document.getElementById("thinking").textContent = j.error || "não consegui abrir o microfone";
+};
+
+const micSel = document.getElementById("micSel");
+fetch("/api/mics").then(r => r.json()).then(j => {
+  micSel.innerHTML = j.devices.map(d => `<option value="${d.id}">${esc(d.name)}</option>`).join("");
+  if (j.current !== null && j.current !== undefined) micSel.value = String(j.current);
+  if (!j.devices.length) micSel.innerHTML = "<option>nenhum microfone encontrado</option>";
+});
+micSel.onchange = () => fetch("/api/mic/select", {method: "POST", headers: {"Content-Type": "application/json"},
+                                                  body: JSON.stringify({id: Number(micSel.value)})});
 </script>
 </body>
 </html>

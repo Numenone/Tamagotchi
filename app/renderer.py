@@ -178,9 +178,9 @@ def effect_pos(pat, x, y, a, b, c, t):
 
 
 STAT_LABELS = {
-    "pt": ("Fome", "Alegria", "Energia", "Higiene", "dormindo"),
+    "pt": ("Comida", "Alegria", "Energia", "Higiene", "dormindo"),
     "en": ("Food", "Joy", "Energy", "Clean", "sleeping"),
-    "es": ("Hambre", "Alegria", "Energia", "Higiene", "durmiendo"),
+    "es": ("Comida", "Alegria", "Energia", "Higiene", "durmiendo"),
 }
 
 

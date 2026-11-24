@@ -12,6 +12,7 @@ from . import animations as A
 AI = A.ANIM_INDEX
 IDLE_POOL_GOOD = ["idle", "idle", "happy", "curious", "singing", "relaxed", "wink", "dancing", "idle", "bored"]
 IDLE_POOL_MEH = ["idle", "bored", "idle", "thinking"]
+SLEEP_REST_MS = 5000  # dormindo: +1 de energia a cada 5 s (igual ao firmware)
 
 
 def clamp(v):
@@ -51,6 +52,7 @@ class PetState:
         self._last_frame = 0
         self._last_decay = 0
         self._last_age = 0
+        self._last_rest = 0
         self._last_pick = -99999
         self.events = []  # acoes executadas (para avisar o Claude)
 
@@ -64,6 +66,13 @@ class PetState:
         if now_ms - self._last_decay >= self.decay_seconds * 1000:
             self._last_decay = now_ms
             self.decay()
+        # dormindo: recupera energia aos poucos (+1 a cada 5 s, de 0 a 100 em ~8 min)
+        if self.sleeping and now_ms - self._last_rest >= SLEEP_REST_MS:
+            self._last_rest = now_ms
+            self.energy = clamp(self.energy + 1)
+            if self.energy >= 100:
+                self.sleeping = False
+                self.play(AI["yawn"], 2500)
         if now_ms - self._last_age >= 60000:
             self._last_age = now_ms
             self.age_min += 1
@@ -86,11 +95,7 @@ class PetState:
 
     def decay(self):
         if self.sleeping:
-            self.energy = clamp(self.energy + 4)
-            self.hunger = clamp(self.hunger - 1)
-            if self.energy >= 100:
-                self.sleeping = False
-                self.play(AI["yawn"], 2500)
+            self.hunger = clamp(self.hunger - 1)  # a energia volta aos poucos em update()
         else:
             self.hunger = clamp(self.hunger - 2)
             self.energy = clamp(self.energy - 1)

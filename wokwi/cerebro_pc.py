@@ -21,6 +21,8 @@ import urllib.request
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+import numpy as np
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
@@ -36,6 +38,130 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 S = settings_mod.load()
 BRAIN = brain_mod.Brain(S)
+MIC_CHOICE = os.path.join(ROOT, "data", "cerebro_mic.json")  # microfone escolhido na pagina
+
+
+# ------------------------------------------------------------------ microfone do PC
+class Mic:
+    """Grava do microfone escolhido (16 kHz mono), igual ao Tamagotchi Studio."""
+    RATE = 16000
+    MAX_SECONDS = 20
+
+    def __init__(self):
+        self.stream = None
+        self.frames = []
+        self.level = 0.0
+        self.started = 0.0
+        self.transcribing = False
+        self.error = ""
+        self.device = self._initial_device()
+
+    @staticmethod
+    def devices():
+        """Microfones (so os do driver MME, para nao repetir o mesmo aparelho)."""
+        import sounddevice as sd
+        out = []
+        for i, d in enumerate(sd.query_devices()):
+            if d["max_input_channels"] > 0 and sd.query_hostapis(d["hostapi"])["name"] == "MME":
+                if "mapeador" in d["name"].lower() or "mapper" in d["name"].lower():
+                    continue
+                out.append({"id": i, "name": d["name"]})
+        return out
+
+    def _initial_device(self):
+        try:
+            with open(MIC_CHOICE, encoding="utf-8") as f:
+                name = json.load(f).get("name", "")
+            for d in self.devices():
+                if d["name"] == name:
+                    return d["id"]
+        except (OSError, ValueError):
+            pass
+        except Exception:
+            return None
+        try:  # sem escolha salva: o primeiro microfone de verdade (microfones virtuais costumam ficar mudos)
+            devs = self.devices()
+            real = [d for d in devs if "voicemod" not in d["name"].lower()]
+            return (real or devs)[0]["id"] if devs else None
+        except Exception:
+            return None
+
+    def select(self, dev_id):
+        for d in self.devices():
+            if d["id"] == dev_id:
+                self.device = dev_id
+                try:
+                    os.makedirs(os.path.dirname(MIC_CHOICE), exist_ok=True)
+                    with open(MIC_CHOICE, "w", encoding="utf-8") as f:
+                        json.dump({"name": d["name"]}, f, ensure_ascii=False)
+                except OSError:
+                    pass
+                return True
+        return False
+
+    @property
+    def on(self):
+        return self.stream is not None
+
+    def start(self):
+        import sounddevice as sd
+        if self.on:
+            return True
+        self.frames, self.level, self.error = [], 0.0, ""
+        try:
+            self.stream = sd.InputStream(samplerate=self.RATE, channels=1, dtype="int16",
+                                         device=self.device, callback=self._cb)
+            self.stream.start()
+        except Exception as e:
+            self.stream = None
+            self.error = f"nao consegui abrir o microfone: {e}"
+            return False
+        self.started = time.time()
+        return True
+
+    def _cb(self, indata, frames, t, status):
+        self.frames.append(indata.copy())
+        self.level = min(1.0, float(np.abs(indata).mean()) / 1500.0)
+        if time.time() - self.started > self.MAX_SECONDS:
+            threading.Thread(target=self.stop_and_send, daemon=True).start()
+
+    def stop(self):
+        st, self.stream = self.stream, None
+        if st:
+            try:
+                st.stop()
+                st.close()
+            except Exception:
+                pass
+        self.level = 0.0
+        if not self.frames:
+            return np.zeros(0, dtype=np.int16)
+        pcm = np.concatenate(self.frames).reshape(-1).astype(np.int16)
+        self.frames = []
+        return pcm
+
+    def stop_and_send(self):
+        if not self.on:
+            return
+        pcm = self.stop()
+        self.transcribing = True
+        try:
+            if len(pcm) < self.RATE * 0.3 or np.abs(pcm).max() < 300:
+                add_log("sistema", "nao ouvi nada. Confira o microfone escolhido (o medidor tem que mexer quando voce fala).")
+                return
+            text = voice.transcribe(pcm, self.RATE, S)
+        except Exception as e:
+            add_log("sistema", f"nao consegui transcrever ({str(e)[:120]})")
+            return
+        finally:
+            self.transcribing = False
+        if not text:
+            add_log("sistema", "nao entendi o que voce falou. Tente de novo, mais perto do microfone.")
+            return
+        threading.Thread(target=converse, args=(text, "voce (microfone)"), daemon=True).start()
+
+
+MIC = Mic()
 
 lock = threading.Lock()  # uma conversa por vez
 log_lock = threading.Lock()
@@ -196,7 +322,16 @@ class Handler(BaseHTTPRequestHandler):
                 items = [e for e in LOG if e["n"] > after]
             st = dict(STATE)
             st["fresh"] = time.time() - st.pop("seen") < 600  # o ESP32 mandou noticia nos ultimos 10 min
-            return self._send(200, json.dumps({"log": items, "state": st, "status": STATUS}, ensure_ascii=False))
+            status = dict(STATUS)
+            status["mic"] = {"on": MIC.on, "level": round(MIC.level, 3), "transcribing": MIC.transcribing,
+                             "error": MIC.error}
+            return self._send(200, json.dumps({"log": items, "state": st, "status": status}, ensure_ascii=False))
+        if self.path == "/api/mics":
+            try:
+                devs = Mic.devices()
+            except Exception as e:
+                devs, MIC.error = [], f"nao achei microfones: {e}"
+            return self._send(200, json.dumps({"devices": devs, "current": MIC.device}, ensure_ascii=False))
         if self.path.startswith("/api/audio/"):
             a = AUDIO.get(self.path.rsplit("/", 1)[1])
             if not a:
@@ -218,6 +353,18 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/api/action":
             quick_action(str(data.get("action", "")))
             return self._send(202, "{}")
+        if self.path == "/api/mic/start":
+            ok = MIC.start()
+            return self._send(200 if ok else 500, json.dumps({"ok": ok, "error": MIC.error}, ensure_ascii=False))
+        if self.path == "/api/mic/stop":
+            threading.Thread(target=MIC.stop_and_send, daemon=True).start()
+            return self._send(202, "{}")
+        if self.path == "/api/mic/select":
+            try:
+                ok = MIC.select(int(data.get("id")))
+            except (TypeError, ValueError):
+                ok = False
+            return self._send(200 if ok else 400, json.dumps({"ok": ok}))
         if self.path == "/api/clear":
             BRAIN.clear()
             add_log("sistema", "memoria da conversa apagada")

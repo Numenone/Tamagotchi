@@ -31,7 +31,8 @@ static Stats st;
 static uint8_t curAnim = ANIM_HELLO, autoAnim = ANIM_IDLE, overrideAnim = ANIM_HELLO;
 static uint32_t overrideUntil = 2500;
 static uint16_t frameT = 0;
-static uint32_t lastFrame, lastDecay, lastAge, lastPick, lastSave, lastStatsTx, lastPc;
+static uint32_t lastFrame, lastDecay, lastAge, lastPick, lastSave, lastStatsTx, lastPc, lastRest;
+#define SLEEP_REST_MS 5000UL  // dormindo: +1 de energia a cada 5 s
 static bool forcePick = true;
 static bool menuActive = false, statsScreen = false, talking = false, recording = false, pcLink = false;
 static uint8_t menuSel = 0;
@@ -102,9 +103,7 @@ static void resetStats() {
 
 static void decay() {
   if (st.sleeping) {
-    st.energy = clamp100(st.energy + 4);
-    st.hunger = clamp100(st.hunger - 1);
-    if (st.energy >= 100) { st.sleeping = 0; playAnim(ANIM_YAWN, 2500); }
+    st.hunger = clamp100(st.hunger - 1);  // a energia volta aos poucos no petTick()
   } else {
     st.hunger = clamp100(st.hunger - 2);
     st.energy = clamp100(st.energy - 1);
@@ -466,6 +465,18 @@ static void petTick() {
   memcpy_P(&an, &ANIMS[curAnim], sizeof(an));
   if (now - lastFrame >= (uint32_t)an.speed10 * 10) { lastFrame = now; frameT++; }
   if (now - lastDecay >= (uint32_t)DECAY_SECONDS * 1000UL) { lastDecay = now; decay(); sendStats(); }
+  // dormindo: recupera energia aos poucos (+1 a cada 5 s, de 0 a 100 em ~8 min)
+  if (st.sleeping && now - lastRest >= SLEEP_REST_MS) {
+    lastRest = now;
+    st.energy = clamp100(st.energy + 1);
+    if (st.energy >= 100) {  // descansou: acorda sozinho
+      st.sleeping = 0;
+      playAnim(ANIM_YAWN, 2500);
+      dispBrightness(OLED_CONTRAST);
+      saveStats();
+      sendStats();
+    }
+  }
   if (now - lastAge >= 60000UL) { lastAge = now; st.ageMin++; }
   if (now - lastSave >= 300000UL) saveStats();
   if (overrideAnim != 255 && !recording && (int32_t)(now - overrideUntil) > 0) {

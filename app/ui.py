@@ -469,7 +469,7 @@ class Slider:
 
 def stat_bars(surf, pet, pos, width=300, size=16):
     x, y = pos
-    items = [("i_apple", "Fome", pet.hunger, C["orange"]), ("i_heart", "Alegria", pet.happy, C["pink"]),
+    items = [("i_apple", "Comida", pet.hunger, C["orange"]), ("i_heart", "Alegria", pet.happy, C["pink"]),
              ("i_bolt", "Energia", pet.energy, C["yellow"]), ("i_drop", "Higiene", pet.clean, C["cyan"])]
     for ic, lbl, v, col in items:
         surf.blit(icon(ic, 3, col), (x, y + 2))

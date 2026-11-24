@@ -15,9 +15,9 @@ CLI_EXE = os.path.join(TOOLS_DIR, "arduino-cli", "arduino-cli.exe")
 RX_BUFFER = 256  # buffer serial ampliado (necessario para streaming de audio)
 
 STAT_LABELS = {
-    "pt": ("Fome", "Alegria", "Energia", "Higiene", "dormindo", "Sem PC :("),
+    "pt": ("Comida", "Alegria", "Energia", "Higiene", "dormindo", "Sem PC :("),
     "en": ("Food", "Joy", "Energy", "Clean", "sleeping", "No PC :("),
-    "es": ("Hambre", "Alegria", "Energia", "Higiene", "durmiendo", "Sin PC :("),
+    "es": ("Comida", "Alegria", "Energia", "Higiene", "durmiendo", "Sin PC :("),
 }
 MENU_LABELS = {
     "pt": ["Comer", "Brincar", "Banho", "Dormir", "Status", "Falar"],
