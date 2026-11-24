@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{PET}} Cerebro</title>
+<style>
+  :root {
+    --bg: #0b0d1c; --panel: #151933; --panel2: #1d2246; --line: #2c3263;
+    --text: #f0ecff; --muted: #9a93c4; --cyan: #7debff; --pink: #ff6fb5;
+    --orange: #ff9f43; --yellow: #ffd166; --green: #82ff8c; --red: #ff7878;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 system-ui, "Segoe UI", sans-serif; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 20px 16px 40px; display: grid; gap: 16px;
+          grid-template-columns: 300px 1fr; }
+  @media (max-width: 760px) { .wrap { grid-template-columns: 1fr; } }
+  header { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  header h1 { margin: 0; font-size: 26px; letter-spacing: .5px; }
+  header h1 span { color: var(--cyan); }
+  .chip { font-size: 12px; padding: 4px 10px; border-radius: 99px; background: var(--panel2); color: var(--muted);
+          border: 1px solid var(--line); }
+  .chip.ok { color: var(--green); border-color: #2f6b3a; }
+  .chip.warn { color: var(--yellow); border-color: #6b5a2f; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+  .card h2 { margin: 0 0 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--muted); }
+  .bar { display: grid; grid-template-columns: 70px 1fr 34px; align-items: center; gap: 8px; margin: 8px 0; font-size: 14px; }
+  .track { height: 10px; background: #0d1028; border-radius: 6px; overflow: hidden; border: 1px solid var(--line); }
+  .fill { height: 100%; border-radius: 6px; transition: width .4s; }
+  .num { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .sleep { margin-top: 10px; font-size: 13px; color: var(--muted); }
+  .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  button { font: inherit; color: var(--text); background: var(--panel2); border: 1px solid var(--line);
+           border-radius: 10px; padding: 9px 10px; cursor: pointer; }
+  button:hover { border-color: var(--cyan); }
+  button:disabled { opacity: .5; cursor: default; }
+  .phone { font-size: 13px; color: var(--muted); }
+  .phone b { color: var(--yellow); }
+  .chat { display: flex; flex-direction: column; min-height: 520px; }
+  #log { flex: 1; overflow-y: auto; max-height: 56vh; display: flex; flex-direction: column; gap: 10px; padding-right: 4px; }
+  .msg { max-width: 82%; padding: 10px 12px; border-radius: 12px; background: var(--panel2); }
+  .msg .who { font-size: 12px; color: var(--muted); margin-bottom: 2px; }
+  .msg.me { align-self: flex-end; background: #2a2f63; }
+  .msg.pet { align-self: flex-start; border: 1px solid #2f5f6b; }
+  .msg.pet .who { color: var(--cyan); }
+  .msg.sys { align-self: center; background: transparent; color: var(--muted); font-size: 13px; padding: 2px; }
+  .msg .tag { font-size: 11px; color: var(--pink); margin-left: 6px; }
+  .msg button.play { margin-top: 6px; padding: 3px 9px; font-size: 12px; }
+  .thinking { color: var(--muted); font-size: 13px; height: 20px; margin: 8px 2px; }
+  .talk { display: flex; gap: 10px; align-items: center; margin-top: 8px; }
+  #mic { width: 64px; height: 64px; border-radius: 50%; font-size: 26px; flex: none; background: var(--pink);
+         border: none; color: #fff; box-shadow: 0 0 0 0 rgba(255,111,181,.6); }
+  #mic.on { animation: pulse 1.2s infinite; background: var(--red); }
+  @keyframes pulse { 70% { box-shadow: 0 0 0 16px rgba(255,111,181,0); } 100% { box-shadow: 0 0 0 0 rgba(255,111,181,0); } }
+  #text { flex: 1; font: inherit; color: var(--text); background: #0d1028; border: 1px solid var(--line);
+          border-radius: 10px; padding: 11px 12px; min-width: 0; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1><span>{{PET}}</span> cérebro no PC</h1>
+    <span class="chip" id="cNtfy">ntfy: conectando...</span>
+    <span class="chip" id="cEsp">ESP32: esperando</span>
+  </header>
+
+  <div style="display:grid;gap:16px;align-content:start">
+    <div class="card">
+      <h2>Como o {{PET}} está</h2>
+      <div id="bars"></div>
+      <div class="sleep" id="sleep"></div>
+    </div>
+    <div class="card">
+      <h2>Cuidar</h2>
+      <div class="actions">
+        <button data-a="feed">Comer</button>
+        <button data-a="play">Brincar</button>
+        <button data-a="clean">Banho</button>
+        <button data-a="sleep">Dormir</button>
+        <button data-a="wake">Acordar</button>
+        <button id="clear">Apagar memória</button>
+      </div>
+    </div>
+    <div class="card phone">
+      <h2>Pelo celular</h2>
+      No app <b>ntfy</b>, assine o tópico <b>{{TOPIC}}</b> e mande a frase (o microfone do teclado faz o ditado).
+      A resposta aparece aqui, no Wokwi e no celular.
+    </div>
+  </div>
+
+  <div class="card chat">
+    <h2>Conversa</h2>
+    <div id="log"></div>
+    <div class="thinking" id="thinking"></div>
+    <div class="talk">
+      <button id="mic" title="Falar">🎤</button>
+      <input id="text" placeholder="Fale no microfone ou digite aqui e aperte Enter" autocomplete="off">
+    </div>
+    <div class="hint" id="hint">Clique no microfone, fale, e espere o {{PET}} responder. A voz sai por este computador.</div>
+  </div>
+</div>
+
+<script>
+const BARS = [["hunger", "Fome", "--orange"], ["happy", "Alegria", "--pink"], ["energy", "Energia", "--yellow"], ["clean", "Higiene", "--cyan"]];
+const barsEl = document.getElementById("bars");
+barsEl.innerHTML = BARS.map(([k, l, c]) =>
+  `<div class="bar"><span>${l}</span><div class="track"><div class="fill" id="f_${k}" style="background:var(${c})"></div></div><span class="num" id="n_${k}"></span></div>`).join("");
+
+let after = 0, firstLoad = true;
+const logEl = document.getElementById("log");
+const audio = new Audio();
+
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c])); }
+
+function addMsg(e) {
+  const d = document.createElement("div");
+  const pet = e.who === "{{PET}}", sys = e.who === "sistema";
+  d.className = "msg " + (pet ? "pet" : sys ? "sys" : "me");
+  if (sys) d.textContent = e.text;
+  else {
+    let tag = pet && e.anim ? `<span class="tag">${esc(e.anim)}${e.action && e.action !== "none" ? " + " + esc(e.action) : ""}</span>` : "";
+    d.innerHTML = `<div class="who">${esc(e.who)} · ${esc(e.t)}${tag}</div>${esc(e.text)}`;
+    if (pet && e.audio) {
+      const b = document.createElement("button");
+      b.className = "play"; b.textContent = "▶ ouvir de novo";
+      b.onclick = () => play(e.audio);
+      d.appendChild(b);
+    }
+  }
+  logEl.appendChild(d);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function play(id) { audio.src = "/api/audio/" + id; audio.play().catch(() => {}); }
+
+async function poll() {
+  try {
+    const r = await fetch("/api/log?after=" + after);
+    const j = await r.json();
+    for (const e of j.log) {
+      addMsg(e);
+      after = e.n;
+      if (!firstLoad && e.who === "{{PET}}" && e.audio) play(e.audio);
+    }
+    firstLoad = false;
+    for (const [k] of BARS) {
+      const v = j.state[k] ?? 0;
+      document.getElementById("f_" + k).style.width = v + "%";
+      document.getElementById("n_" + k).textContent = v;
+    }
+    document.getElementById("sleep").textContent = j.state.sleeping ? "Dormindo 💤" : "Acordado";
+    const cN = document.getElementById("cNtfy");
+    cN.textContent = j.status.ntfy ? "ntfy: conectado" : "ntfy: conectando...";
+    cN.className = "chip " + (j.status.ntfy ? "ok" : "warn");
+    const cE = document.getElementById("cEsp");
+    cE.textContent = j.state.fresh ? "ESP32: falando com o PC" : "ESP32: esperando notícia";
+    cE.className = "chip " + (j.state.fresh ? "ok" : "warn");
+    document.getElementById("thinking").textContent = j.status.thinking ? "{{PET}} está pensando..." : "";
+  } catch (e) {
+    document.getElementById("cNtfy").textContent = "programa fechado?";
+  }
+  setTimeout(poll, 1000);
+}
+poll();
+
+async function say(text) {
+  text = text.trim();
+  if (!text) return;
+  await fetch("/api/say", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({text})});
+}
+
+const input = document.getElementById("text");
+input.addEventListener("keydown", e => { if (e.key === "Enter") { say(input.value); input.value = ""; } });
+
+document.querySelectorAll("[data-a]").forEach(b => b.onclick = () =>
+  fetch("/api/action", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({action: b.dataset.a})}));
+document.getElementById("clear").onclick = () => fetch("/api/clear", {method: "POST"});
+
+// microfone: reconhecimento de voz do proprio navegador (Chrome ou Edge)
+const mic = document.getElementById("mic");
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (!SR) {
+  mic.disabled = true;
+  document.getElementById("hint").textContent = "Este navegador não tem reconhecimento de voz. Abra no Chrome ou no Edge, ou digite.";
+} else {
+  const rec = new SR();
+  rec.lang = "pt-BR";
+  rec.interimResults = true;
+  rec.maxAlternatives = 1;
+  let listening = false, finalText = "";
+  rec.onresult = ev => {
+    let interim = "";
+    for (let i = ev.resultIndex; i < ev.results.length; i++) {
+      if (ev.results[i].isFinal) finalText += ev.results[i][0].transcript;
+      else interim += ev.results[i][0].transcript;
+    }
+    input.value = finalText + interim;
+  };
+  rec.onend = () => {
+    listening = false; mic.classList.remove("on");
+    if (finalText.trim()) { say(finalText); input.value = ""; }
+    finalText = "";
+  };
+  rec.onerror = ev => {
+    if (ev.error === "not-allowed") document.getElementById("hint").textContent = "O navegador bloqueou o microfone. Libere no cadeado da barra de endereço.";
+  };
+  mic.onclick = () => {
+    audio.pause();
+    if (listening) { rec.stop(); return; }
+    finalText = ""; input.value = "";
+    try { rec.start(); listening = true; mic.classList.add("on"); } catch (e) {}
+  };
+}
+</script>
+</body>
+</html>
