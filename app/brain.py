@@ -11,6 +11,9 @@ HISTORY_PATH = os.path.join(DATA_DIR, "history.json")
 CHAT_ACTIONS = ["none", "feed", "play", "clean", "sleep", "wake"]
 
 LANG_NAME = {"pt": "Brazilian Portuguese", "en": "English", "es": "Spanish"}
+REFUSAL = {"pt": "Hmm, disso eu prefiro não falar. Vamos brincar de outra coisa?",
+           "en": "Hmm, I'd rather not talk about that. Shall we play something else?",
+           "es": "Mmm, de eso prefiero no hablar. ¿Jugamos a otra cosa?"}
 
 SCHEMA = {
     "type": "object",
@@ -29,7 +32,7 @@ def build_system(s):
     lang = LANG_NAME.get(s.get("language", "pt-BR")[:2], "Brazilian Portuguese")
     anims = "\n".join(f"- {a[0]}: {a[7]}" for a in A.ANIMATIONS)
     return f"""You are {s.get('pet_name', 'PIXO')}, a tiny virtual pet living inside an Arduino tamagotchi.
-Your body is a round pixel creature with little ears, shown on a 128x64 OLED screen.
+Your body is a round pixel creature with little ears, shown on a tiny screen.
 Personality: {s.get('personality', '')}
 
 How you talk:
@@ -112,7 +115,7 @@ class Brain:
             else:
                 raise
         if resp.stop_reason == "refusal":
-            data = {"speech": "Hmm, disso eu prefiro não falar. Vamos brincar de outra coisa?",
+            data = {"speech": REFUSAL.get(self.s.get("language", "pt-BR")[:2], REFUSAL["pt"]),
                     "animation": "confused", "action": "none", "mood_change": 0}
         else:
             text = next((b.text for b in resp.content if b.type == "text"), "{}")
