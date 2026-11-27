@@ -2,15 +2,158 @@
 
 Um bichinho virtual que mora em um Arduino Uno com o shield **VS1053 MP3 (Geeetech)**, conversa por voz com o **Claude**, fala com uma voz neural gratuita e mostra **50 animações** de emoção em uma tela TFT colorida (ou num OLED). O mesmo pet também roda no PC como mascote virtual.
 
-## Como usar
+**Simulação online no Wokwi:** https://wokwi.com/projects/481585621068344321
 
-1. Dê dois cliques em **`TAMAGOTCHI.bat`**.
-   * Na primeira vez ele instala tudo sozinho: Python (se faltar), bibliotecas e o compilador do Arduino.
-2. Faça o **tutorial** (8 passos). No final, cole a sua **chave do Claude** (console.anthropic.com, em API Keys).
-3. A tela principal fica **esperando o Arduino**. Ligue o cabo USB e pronto: o Studio gera as configurações, compila e grava o firmware sozinho, mostrando a animação de programação. Quando termina, o pet aparece no display.
-4. Para conversar: **segure o botão C** do Arduino e fale. Ou use a tela **Conversar** do Studio (botão de microfone, tecla ESPAÇO ou digitando).
+## Três jeitos de rodar
+
+| Jeito | Precisa de | Para quem |
+|---|---|---|
+| [1. No Wokwi (simulador online)](#1-no-wokwi-simulador-online) | Só o navegador | Ver o pet funcionando sem comprar nada |
+| [2. No programa para desktop (Tamagotchi Studio)](#2-no-programa-para-desktop-tamagotchi-studio) | Um PC com Windows | Brincar com o pet no PC e conversar por voz |
+| [3. No Arduino de verdade](#3-no-arduino-de-verdade) | As peças da lista + o Studio | Montar o bichinho físico |
+
+O pet é o mesmo nos três: as mesmas 50 animações, o mesmo menu (Comer, Brincar, Banho, Dormir, Status, Falar) e as mesmas regras de fome, alegria, energia e higiene.
+
+### Antes de tudo: baixar o projeto
+
+Só é necessário para os jeitos 2 e 3 (e para conversar por voz no jeito 1).
+
+* **Sem Git:** nesta página do GitHub, clique no botão verde **Code** e depois em **Download ZIP**. Descompacte a pasta em um lugar fácil, por exemplo na Área de Trabalho. Não rode o programa de dentro do ZIP.
+* **Com Git:**
+  ```
+  git clone https://github.com/Numenone/Tamagotchi.git
+  ```
+
+### A chave da API (o "cérebro" do pet)
+
+Para o pet **conversar**, ele precisa de uma chave da API da Anthropic. Sem a chave, o pet funciona normalmente (comer, brincar, dormir, animações), só não responde quando você fala com ele.
+
+1. Entre em https://console.anthropic.com e crie uma conta.
+2. Em **Billing**, coloque créditos (a API é paga por uso; cada conversa custa centavos).
+3. Em **API Keys**, clique em **Create Key** e copie a chave (ela começa com `sk-ant-`).
+4. Guarde a chave só para você. Nunca coloque a chave em arquivos que vão para o GitHub nem em projetos públicos do Wokwi.
+
+---
+
+## 1. No Wokwi (simulador online)
+
+O Wokwi simula um ESP32 com tela colorida (ILI9341), três botões e um buzzer. Não precisa instalar nada.
+
+### Passo a passo
+
+1. Abra o link: https://wokwi.com/projects/481585621068344321
+2. Clique no botão verde de **play** (▶) em cima do desenho do circuito.
+3. Espere a compilação (na primeira vez leva cerca de um minuto). A tela simulada acende e mostra o pet.
+4. Embaixo aparece o **Serial Monitor**, com as mensagens do pet. Quando aparecer que o Wi-Fi conectou, a parte de conversa já está pronta.
+5. Use os botões clicando neles com o mouse, ou pelo teclado (clique uma vez em cima do circuito antes, para o teclado funcionar):
+
+| Botão | Tecla | O que faz |
+|---|---|---|
+| **A** (verde) | `a` | Abre o menu e passa para o próximo item |
+| **B** (azul) | `s` | Escolhe o item |
+| **C** (vermelho) | `d` | Volta, para a fala ou faz carinho |
+
+6. Também dá para mandar comandos digitando no Serial Monitor: `/comer`, `/brincar`, `/banho`, `/dormir`, `/acordar`, `/carinho`, `/status`, `/rede`, `/reset` e `/ajuda`.
+7. Para parar, clique no botão de **stop** (■).
+
+### Conversar com o pet no Wokwi
+
+O Wokwi não tem microfone, então a conversa passa pelo [ntfy.sh](https://ntfy.sh), um serviço gratuito de mensagens. Existem dois jeitos:
+
+**Jeito A: cérebro no PC (recomendado, com microfone e voz)**
+
+1. Faça uma vez o passo a passo do [programa para desktop](#2-no-programa-para-desktop-tamagotchi-studio), até colar a chave da API no tutorial. Isso instala o Python do projeto e salva a chave no `settings.json`.
+2. Deixe a simulação do Wokwi rodando.
+3. Na pasta do projeto, entre em `wokwi` e dê dois cliques em **`CEREBRO.bat`**.
+4. Abre uma página no navegador (http://localhost:8765). Use o **Chrome** ou o **Edge** e permita o microfone.
+5. Fale ou digite uma frase. O PC pensa a resposta, fala com a voz do pet e manda para o Wokwi, que mostra a animação e a legenda na tela.
+6. Deixe a janela preta do `CEREBRO.bat` aberta enquanto estiver usando. Para parar, feche essa janela.
+
+**Jeito B: pelo celular**
+
+1. Instale o app **ntfy** (Android ou iPhone).
+2. Assine o tópico do pet: `tamagotchi_iot` (é o valor de `NTFY_TOPIC` no arquivo `secrets.h` do Wokwi).
+3. Mande uma frase pelo app (o microfone do teclado do celular faz o ditado). A resposta do pet também chega no app.
+
+Para o celular receber resposta, o cérebro precisa estar rodando em algum lugar: no PC (Jeito A) ou no próprio ESP32 (cole a chave em `API_KEY` no `secrets.h`; no Wi-Fi gratuito do Wokwi essa conexão costuma cair, por isso o cérebro no PC é o recomendado).
+
+### Fazer a sua própria cópia no Wokwi
+
+* Para mudar o código e guardar, entre na sua conta do Wokwi e use **Save a copy**.
+* Se o link um dia parar de funcionar, dá para montar o projeto do zero: crie um projeto novo de **ESP32** no Wokwi e crie um arquivo para cada um destes da pasta [`wokwi/`](wokwi): `sketch.ino`, `config.h`, `secrets.h`, `anim_data.h`, `draw.h`, `prompt.h`, `diagram.json` e `libraries.txt`. Copie o conteúdo de cada um e clique em play.
+* Troque o nome do tópico (`NTFY_TOPIC`) por um nome difícil de adivinhar, porque quem souber o nome consegue mandar frases para o pet.
+* **Nunca salve o projeto do Wokwi com a chave da API preenchida:** qualquer pessoa com o link consegue ver os arquivos.
+
+Mais detalhes em [`wokwi/README.md`](wokwi/README.md).
+
+---
+
+## 2. No programa para desktop (Tamagotchi Studio)
+
+O **Tamagotchi Studio** é o programa do PC. Ele mostra o pet na tela do computador, conversa por voz e é também quem grava o firmware no Arduino.
+
+### O que precisa
+
+* PC com **Windows 10 ou 11**
+* Internet (para instalar na primeira vez e para conversar)
+* A [chave da API](#a-chave-da-api-o-cérebro-do-pet)
+* Microfone e caixa de som ou fone (para conversar por voz; também dá para digitar)
+
+Não precisa instalar Python nem nada antes: o programa instala tudo sozinho.
+
+### Passo a passo
+
+1. [Baixe o projeto](#antes-de-tudo-baixar-o-projeto) e abra a pasta.
+2. Dê dois cliques em **`TAMAGOTCHI.bat`**.
+   * Se o Windows mostrar "O Windows protegeu o computador", clique em **Mais informações** e depois em **Executar assim mesmo**.
+   * Na primeira vez abre uma janela preta que faz três coisas sozinha: procura (ou instala) o Python 3.12, instala as bibliotecas e baixa o compilador do Arduino. Isso pode levar alguns minutos. Não feche a janela.
+   * Se o Python não instalar sozinho, baixe em https://www.python.org/downloads/, marque **Add Python to PATH** na instalação e abra o `TAMAGOTCHI.bat` de novo.
+3. O Studio abre com um **tutorial de 8 passos**. Leia e avance. No último passo, cole a sua **chave da API** e confirme.
+4. Pronto. A tela **Início** aparece, esperando um Arduino. Você não precisa ter um Arduino para usar o Studio.
+5. Clique em **Brincar com o pet no PC** (ou em **Conversar**, no menu da esquerda). O pet aparece na tela do computador.
+6. Para conversar, clique no botão do microfone (ou segure a tecla **ESPAÇO** enquanto fala) ou digite a mensagem. O pet responde com voz e com uma animação.
+
+Nas próximas vezes, é só dar dois cliques no `TAMAGOTCHI.bat`: ele abre direto, sem instalar de novo.
+
+### Telas do Studio
+
+| Tela | Para que serve |
+|---|---|
+| **Início** | Espera o Arduino e grava o firmware sozinho; atalho para brincar com o pet no PC |
+| **Conversar** | Conversa por voz ou por texto |
+| **Animações** | Mostra as 50 animações do pet |
+| **Configurações** | Nome do pet, idioma, voz, modelo, pinos, tipo de tela, volume e modo sem fio |
+| **Ligações** | Desenho de como ligar os fios no Arduino |
+| **Tutorial** | Abre o tutorial de novo |
+
+---
+
+## 3. No Arduino de verdade
+
+### O que precisa
+
+* As peças da [lista de peças](#peças) (Arduino Uno, shield VS1053, tela, 3 botões e fone ou caixinha de som)
+* Um cabo USB para o Arduino
+* O [Tamagotchi Studio](#2-no-programa-para-desktop-tamagotchi-studio) já instalado e com a chave colada
+
+Não precisa instalar a Arduino IDE: o Studio compila e grava sozinho.
+
+### Passo a passo
+
+1. **Monte o circuito** com o Arduino **desligado**:
+   1. Encaixe o shield VS1053 em cima do Arduino Uno.
+   2. Ligue a tela e os botões seguindo as tabelas da seção [Ligações](#ligações) (também aparecem desenhadas na tela **Ligações** do Studio).
+   3. Ligue o fone ou a caixinha de som na saída **SPK** do shield.
+2. Abra o **`TAMAGOTCHI.bat`**. Se o seu circuito for diferente do padrão (outra tela, outros pinos, Nano ou Mega), ajuste em **Configurações** e salve.
+3. Na tela **Início**, ligue o Arduino no USB do PC.
+4. O Studio reconhece a placa e grava o firmware sozinho, mostrando a animação de programação. Leva uns segundos.
+5. Quando termina, o pet aparece na tela do Arduino.
+6. **Confira a tela:** em **Configurações**, clique em **Testar a tela no Arduino**. Deve aparecer uma moldura branca encostando nas 4 bordas e quadrados vermelho, verde e azul. Se não aparecer assim, veja o [ajuste da TFT](#ligações).
+7. **Para conversar:** segure o botão **C** do Arduino, fale (até 15 segundos) e solte. O pet responde pela caixa de som. Para isso o Arduino precisa estar ligado no PC com o Studio aberto, porque é o PC que usa a internet. Sem o Studio, o pet continua vivo (menu, fome, sono, animações) e mostra "Sem PC :(" quando você tenta falar.
 
 Mudou alguma coisa em **Configurações** (nome, idioma, pinos, display, volume)? Clique em salvar e o Studio regrava o Arduino automaticamente.
+
+Para conversar **sem o PC**, veja o [modo sem fio com ESP32](#modo-sem-fio-esp32-conversar-sem-o-pc).
 
 ## Peças
 
