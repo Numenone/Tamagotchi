@@ -370,5 +370,5 @@ Para regravar o Uno depois, tire o fio do pino 0 antes (o ESP32 atrapalha a grav
 
 | | | | |
 |---|---|---|---|
-| [<img src="https://github.com/Numenone.png?size=200" width="120" alt="Felipe Ribeiro">](https://github.com/Numenone) | [<img src="https://github.com/MuriloNoguez.png?size=200" width="120" alt="Murilo Noguêz">](https://github.com/MuriloNoguez) | <img src="docs/equipe/membro3.svg" width="120" alt="Integrante 3"> | <img src="docs/equipe/membro4.svg" width="120" alt="Integrante 4"> |
-| **Felipe Ribeiro**<br>Dono do projeto<br>[@Numenone](https://github.com/Numenone) | **Murilo Noguêz**<br>Integrante<br>[@MuriloNoguez](https://github.com/MuriloNoguez) | **Nome**<br>Função<br>@usuario | **Nome**<br>Função<br>@usuario |
+| [<img src="https://github.com/Numenone.png?size=200" width="120" alt="Felipe Ribeiro">](https://github.com/Numenone) | [<img src="https://github.com/MuriloNoguez.png?size=200" width="120" alt="Murilo Noguêz">](https://github.com/MuriloNoguez) | [<img src="https://github.com/EricBReinhardt.png?size=200" width="120" alt="Eric Reinhardt">](https://github.com/EricBReinhardt) | <img src="docs/equipe/membro4.svg" width="120" alt="Integrante 4"> |
+| **Felipe Ribeiro**<br>Dono do projeto<br>[@Numenone](https://github.com/Numenone) | **Murilo Noguêz**<br>Integrante<br>[@MuriloNoguez](https://github.com/MuriloNoguez) | **Eric Reinhardt**<br>Integrante<br>[@EricBReinhardt](https://github.com/EricBReinhardt) | **Nome**<br>Função<br>@usuario |
