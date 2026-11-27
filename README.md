@@ -1,18 +1,32 @@
-# Tamagotchi + Claude no Arduino
+# Tamagotchi + Claude (PIXO)
 
-Um bichinho virtual que mora em um Arduino Uno com o shield **VS1053 MP3 (Geeetech)**, conversa por voz com o **Claude**, fala com uma voz neural gratuita e mostra **50 animações** de emoção em uma tela TFT colorida (ou num OLED). O mesmo pet também roda no PC como mascote virtual.
+Um bichinho virtual com cérebro de IA. O **PIXO** roda em um **ESP32** com tela colorida **ILI9341**, três botões e um buzzer. Ele tem fome, sono, sujeira e humor, mostra **50 animações** de emoção e **conversa com você**: o Claude entende a frase, responde e escolhe a animação que combina com a resposta. O mesmo pet também roda no PC como mascote virtual.
+
+![Circuito do PIXO: ESP32, tela ILI9341, três botões e buzzer](docs/fotos/wokwi-circuito.png)
+
+*Circuito no simulador Wokwi: ESP32, tela ILI9341, botões A/B/C e buzzer.*
 
 **Simulação online no Wokwi:** https://wokwi.com/projects/481585621068344321
 
-## Três jeitos de rodar
+> **Placa:** desenvolvemos e testamos o projeto com o **ESP32**. Também dá para fazer com um **Arduino Uno R3** (shield VS1053), mas essa foi a primeira versão e não a que desenvolvemos por último. Ela está descrita no final, na seção 4.
+
+## O que ele faz
+
+* **Vive sozinho**: fome, alegria, energia e higiene caem com o tempo.
+* **Você cuida dele** pelos botões: Comer, Brincar, Banho, Dormir (recupera energia de verdade), Status e Falar.
+* **Conversa**: você fala no microfone do PC (ou manda texto pelo celular), o Claude responde com voz no PC e o PIXO mostra a animação e a legenda na tela. O buzzer faz a "voz" de bichinho.
+* **Mascote no PC**: o mesmo pet roda numa janela do computador, com as mesmas animações.
+
+## Quatro jeitos de rodar
 
 | Jeito | Precisa de | Para quem |
 |---|---|---|
 | [1. No Wokwi (simulador online)](#1-no-wokwi-simulador-online) | Só o navegador | Ver o pet funcionando sem comprar nada |
 | [2. No programa para desktop (Tamagotchi Studio)](#2-no-programa-para-desktop-tamagotchi-studio) | Um PC com Windows | Brincar com o pet no PC e conversar por voz |
-| [3. No Arduino de verdade](#3-no-arduino-de-verdade) | As peças da lista + o Studio | Montar o bichinho físico |
+| [3. No ESP32 de verdade](#3-no-esp32-de-verdade) | ESP32, tela ILI9341, 3 botões e buzzer | Montar o bichinho físico (nossa versão) |
+| [4. Alternativa: Arduino Uno R3](#4-alternativa-arduino-uno-r3--shield-vs1053) | Uno R3, shield VS1053 e o Studio | Montar a primeira versão do projeto |
 
-O pet é o mesmo nos três: as mesmas 50 animações, o mesmo menu (Comer, Brincar, Banho, Dormir, Status, Falar) e as mesmas regras de fome, alegria, energia e higiene.
+O pet é o mesmo em todos: as mesmas 50 animações, o mesmo menu (Comer, Brincar, Banho, Dormir, Status, Falar) e as mesmas regras de fome, alegria, energia e higiene.
 
 ### Antes de tudo: baixar o projeto
 
@@ -128,7 +142,74 @@ Nas próximas vezes, é só dar dois cliques no `TAMAGOTCHI.bat`: ele abre diret
 
 ---
 
-## 3. No Arduino de verdade
+## 3. No ESP32 de verdade
+
+Esta é a versão que desenvolvemos: o mesmo circuito do Wokwi, montado de verdade. O ESP32 tem Wi-Fi, então ele conversa com o cérebro no PC (ou com o Claude direto) pela internet, sem cabo.
+
+### Peças do ESP32
+
+| Peça | Observação |
+|---|---|
+| ESP32 DevKit (ESP32-WROOM-32) | O cérebro do pet. Tem Wi-Fi |
+| Tela TFT ILI9341 (SPI) | Mostra o pet, a barra de status e a legenda |
+| 3 botões (A, B e C) | Sem resistor, usam o pull-up interno |
+| Buzzer | A "voz" de bichinho |
+| Protoboard e fios | |
+
+### Ligações do ESP32
+
+Estas são as mesmas ligações do circuito do Wokwi (`wokwi/diagram.json`) e do `wokwi/config.h`.
+
+| Tela ILI9341 | ESP32 |
+|---|---|
+| GND | GND |
+| VCC e LED | 3V3 |
+| CS | GPIO 15 |
+| RST | GPIO 4 |
+| D/C | GPIO 2 |
+| MOSI | GPIO 23 |
+| SCK | GPIO 18 |
+| MISO | GPIO 19 |
+
+| Outras peças | ESP32 |
+|---|---|
+| Botão A | GPIO 32 e GND |
+| Botão B | GPIO 33 e GND |
+| Botão C | GPIO 27 e GND |
+| Buzzer | GPIO 25 e GND |
+
+### Passo a passo
+
+1. Monte o circuito pela tabela de **Ligações**.
+2. Na Arduino IDE, instale o suporte à placa **ESP32** (Gerenciador de Placas) e as bibliotecas **Adafruit GFX Library**, **Adafruit ILI9341** e **ArduinoJson**.
+3. Abra `wokwi/sketch.ino` (os outros arquivos da pasta ficam ao lado dele). Em `secrets.h`, troque `WIFI_SSID` e `WIFI_PASS` pelo seu Wi-Fi de 2,4 GHz e escolha um `NTFY_TOPIC` difícil de adivinhar.
+4. Escolha a placa **ESP32 Dev Module**, a porta USB e clique em **Carregar**. Se travar em "Connecting", segure o botão **BOOT** da placa.
+5. No PC, rode `TAMAGOTCHI.bat` uma vez (para guardar a chave do Claude) e depois `wokwi/CEREBRO.bat`. Use o mesmo tópico: `set PIXO_TOPIC=seu_topico` antes de abrir o `CEREBRO.bat`.
+6. Fale na página do cérebro. A resposta aparece no PIXO.
+
+### Como funciona por dentro (ESP32)
+
+```
+ ESP32 (corpo)                     PC: CEREBRO.bat                   Internet
+ tela, botoes, buzzer,    ntfy.sh  microfone e voz (Edge TTS)  --->  Claude (cerebro)
+ fome, sono, animacoes  <------->  pergunta ao Claude: fala +  <---  escolhe 1 de 50 animacoes
+ (sketch.ino)                      emocao
+```
+
+* **Claude**: o cérebro devolve um JSON com a fala, a animação, uma ação (comer, dormir...) e a mudança de humor.
+* **Comunicação**: o PC e o ESP32 conversam pelo [ntfy.sh](https://ntfy.sh). O PC publica no tópico `<tópico>_pc` e o ESP32 escuta. O celular também pode mandar frases pelo app ntfy.
+* **Cérebro no ESP32 (opcional)**: com `API_KEY` no `secrets.h`, o ESP32 chama o Claude direto. No gateway gratuito do Wokwi essa conexão costuma cair, então prefira o cérebro no PC.
+* **Animações**: definidas em `app/animations.py`, que gera o `anim_data.h`. Por isso o pet do PC e o do ESP32 são idênticos.
+
+### Cuidados
+
+* Projetos do Wokwi ficam visíveis para quem tiver o link. Não salve o projeto com a chave no `secrets.h`.
+* Quem souber o tópico do ntfy consegue mandar frases ao PIXO. Use um nome difícil de adivinhar.
+* A chave do Claude fica no `settings.json` do seu PC, que não vai para o Git.
+
+---
+
+## 4. Alternativa: Arduino Uno R3 + shield VS1053
 
 ### O que precisa
 
@@ -155,7 +236,7 @@ Mudou alguma coisa em **Configurações** (nome, idioma, pinos, display, volume)
 
 Para conversar **sem o PC**, veja o [modo sem fio com ESP32](#modo-sem-fio-esp32-conversar-sem-o-pc).
 
-## Peças
+### Peças
 
 | Peça | Observação |
 |---|---|
@@ -165,7 +246,7 @@ Para conversar **sem o PC**, veja o [modo sem fio com ESP32](#modo-sem-fio-esp32
 | 3 botões | A, B e C |
 | Fone ou caixinha de som P2 | Na saída SPK do shield |
 
-## Ligações
+### Ligações
 
 O shield usa os pinos 2 (DREQ), 6 (XCS), 7 (XDCS), 8 (XRESET), 9 (SD CS), 11, 12 e 13 (SPI). A TFT divide o SPI com o shield (cada um com o seu CS):
 
@@ -194,7 +275,7 @@ Usando um OLED I2C no lugar da TFT: VCC no 5V, GND no GND, SDA no A4, SCL no A5,
 
 **Ajuste da TFT:** existem várias versões dessa tela. Em Configurações use "Testar a tela no Arduino": deve aparecer uma moldura branca encostando nas 4 bordas e quadrados vermelho, verde e azul. Se estiver cortada, mude os ajustes horizontal/vertical; se o fundo ficar branco, mude "inverter cores"; se o vermelho sair azul, mude "trocar vermelho e azul".
 
-## Controles do pet
+### Controles do pet
 
 * **A**: abre o menu ou passa para o próximo item
 * **B**: escolhe o item (Comer, Brincar, Banho, Dormir, Status, Falar)
@@ -203,7 +284,7 @@ Usando um OLED I2C no lugar da TFT: VCC no 5V, GND no GND, SDA no A4, SCL no A5,
 
 Fome, alegria, energia e higiene caem com o tempo (a velocidade é configurável) e ficam salvas na EEPROM, então o pet lembra de tudo mesmo desligado.
 
-## Como funciona por dentro
+### Como funciona por dentro
 
 ```
  Arduino (corpo)                 PC: Tamagotchi Studio (ponte)             Internet
@@ -218,7 +299,7 @@ Fome, alegria, energia e higiene caem com o tempo (a velocidade é configurável
 * **Áudio pelo USB**: o microfone do VS1053 grava em PCM 8 kHz, o Arduino comprime em µ-law (8 KB/s) e manda ao PC. A voz volta como MP3 de 48 kbps em blocos de 32 bytes com controle de fluxo, e o VS1053 decodifica sozinho.
 * **Tela**: driver próprio por páginas de 8 linhas (economiza RAM do Uno). Na TFT cada página é colorida na hora (pet, efeitos e barra de status com cores diferentes) e enviada pelo SPI entre um bloco de áudio e outro. As animações são montadas com olhos, bocas, movimentos e efeitos definidos em `app/animations.py`. O mesmo arquivo gera o `anim_data.h` do firmware, por isso o pet do PC e o do Arduino são idênticos.
 
-## Arquivos
+### Arquivos
 
 ```
 TAMAGOTCHI.bat            abre tudo (instala na primeira vez)
@@ -236,7 +317,7 @@ firmware/esp32_bridge/    firmware do ESP32 para o modo sem fio (secrets.h com a
 data/                     memória da conversa e estado do pet virtual
 ```
 
-## Modo sem fio (ESP32): conversar sem o PC
+### Modo sem fio (ESP32): conversar sem o PC
 
 Um **ESP32** ligado na serial do Uno faz o papel do PC: ouve pelo **Google Speech-to-Text**, pensa com o **Claude** e fala pelo **Google Text-to-Speech**. O firmware do Uno, o shield e a tela continuam iguais.
 
@@ -272,7 +353,7 @@ Para regravar o Uno depois, tire o fio do pino 0 antes (o ESP32 atrapalha a grav
 
 **Diferenças em relação ao PC:** a memória da conversa fica só na RAM (some quando desliga), e a voz é a do Google em vez da Edge TTS.
 
-## Problemas comuns
+### Problemas comuns
 
 * **TFT branca, cortada ou com cores trocadas**: use "Testar a tela no Arduino" e os ajustes da TFT em Configurações.
 * **OLED apagado**: troque o endereço para 0x3D, ou o modelo para SH1106.
@@ -280,3 +361,14 @@ Para regravar o Uno depois, tire o fio do pino 0 antes (o ESP32 atrapalha a grav
 * **Microfone não entende**: aumente o ganho do microfone, ou desligue "Usar o microfone do shield" para gravar pelo microfone do PC enquanto segura o C.
 * **Erro ao gravar o Arduino**: feche a Arduino IDE ou qualquer Monitor Serial aberto na mesma porta.
 * **Compilar pela Arduino IDE**: funciona, mas o áudio fica mais lento porque a IDE não aumenta o buffer serial. Prefira o Studio (ele compila com `-DSERIAL_RX_BUFFER_SIZE=256`).
+
+---
+
+## Equipe
+
+**Grupo 11 · Tamagotchi**
+
+| | | | |
+|---|---|---|---|
+| [<img src="https://github.com/Numenone.png?size=200" width="120" alt="Felipe Ribeiro">](https://github.com/Numenone) | [<img src="https://github.com/MuriloNoguez.png?size=200" width="120" alt="Murilo Noguêz">](https://github.com/MuriloNoguez) | <img src="docs/equipe/membro3.svg" width="120" alt="Integrante 3"> | <img src="docs/equipe/membro4.svg" width="120" alt="Integrante 4"> |
+| **Felipe Ribeiro**<br>Dono do projeto<br>[@Numenone](https://github.com/Numenone) | **Murilo Noguêz**<br>Integrante<br>[@MuriloNoguez](https://github.com/MuriloNoguez) | **Nome**<br>Função<br>@usuario | **Nome**<br>Função<br>@usuario |
