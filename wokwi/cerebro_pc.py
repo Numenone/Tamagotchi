@@ -377,9 +377,14 @@ def main():
         print("Sem chave da API no settings.json. Abra o TAMAGOTCHI.bat e coloque a chave em Configuracoes.")
         sys.exit(1)
     threading.Thread(target=ntfy_listener, daemon=True).start()
-    srv = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+    try:
+        srv = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+    except OSError:
+        print(f"Porta {PORT} ocupada. Feche o outro CEREBRO.bat ou use PIXO_PORT=<outra porta>.")
+        sys.exit(1)
     url = f"http://localhost:{PORT}"
     print(f"Cerebro do {S.get('pet_name', 'PIXO')} rodando em {url}  (topico ntfy: {TOPIC})")
+    print(f"Celular: assine https://ntfy.sh/{TOPIC} no app ntfy. O NTFY_TOPIC do secrets.h do Wokwi tem que ser \"{TOPIC}\".")
     print("Deixe esta janela aberta. Ctrl+C para sair.", flush=True)
     add_log("sistema", f"cerebro pronto. Topico do celular: ntfy.sh/{TOPIC}")
     if not os.environ.get("PIXO_NO_BROWSER"):
